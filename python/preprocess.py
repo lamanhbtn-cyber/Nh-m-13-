@@ -9,17 +9,13 @@ class TitanicPreprocessor:
     EMBARKED_VALUES = ["C", "Q", "S"]
 
     def __init__(self, extra_features=False):
-        """
-        extra_features=True sẽ thêm Age*Class, Age*Fare, AgeBand, FareBand
-        (các đặc trưng trong notebook gốc) để bạn thử nghiệm.
-        """
+      
         self.extra_features = extra_features
         self.is_fitted_ = False
 
     # ------------------------------------------------------------------ helpers
     @classmethod
     def _extract_title(cls, df):
-        """Lấy danh xưng từ Name, gộp về 4 nhóm: Master, Miss, Mr, Mrs."""
         title = df["Name"].str.extract(r" ([A-Za-z]+)\.", expand=False)
         title = title.replace({"Mlle": "Miss", "Ms": "Miss", "Mme": "Mrs"})
         # Danh xưng hiếm (Dr, Rev, Col, Countess...) -> Mr / Mrs theo giới tính
@@ -29,7 +25,6 @@ class TitanicPreprocessor:
 
     # ---------------------------------------------------------------------- fit
     def fit(self, df):
-        """Học thống kê từ tập TRAIN."""
         title = self._extract_title(df)
 
         self.age_by_title_ = df["Age"].groupby(title).median().to_dict()
@@ -47,7 +42,6 @@ class TitanicPreprocessor:
 
     # ---------------------------------------------------------------- transform
     def transform(self, df):
-        """Biến đổi train hoặc test thành bảng toàn số, không còn giá trị thiếu."""
         if not self.is_fitted_ and not hasattr(self, "age_by_title_"):
             raise RuntimeError("Cần gọi fit() trước khi transform().")
 
