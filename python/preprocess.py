@@ -1,24 +1,3 @@
-"""
-preprocess.py - Tiền xử lý dữ liệu Titanic cho Random Forest / Gradient Boosting.
-
-Nguyên tắc chính:
-  * fit()       : chỉ học các thống kê (tuổi trung vị theo danh xưng, cảng phổ biến nhất,
-                  giá vé trung vị...) từ tập TRAIN.
-  * transform() : áp dụng đúng các thống kê đó cho train hoặc test -> hai tập luôn nhất quán.
-  * Cột sinh ra luôn cố định (dùng danh sách giá trị cố định cho one-hot) nên test
-    không bao giờ bị lệch cột so với train.
-  * Không chuẩn hóa z-score vì mô hình cây không cần.
-
-Cách dùng trong code khác:
-    from preprocess import TitanicPreprocessor
-    prep = TitanicPreprocessor()
-    X = prep.fit_transform(train.drop(columns="Survived"))
-    X_test = prep.transform(test)
-
-Chạy trực tiếp để tạo file:
-    python preprocess.py
-    -> processed_train.csv, processed_test.csv, preprocessor.pkl
-"""
 
 import numpy as np
 import pandas as pd
