@@ -4,32 +4,31 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
+from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     accuracy_score,
-    classification_report,
-    confusion_matrix,
-    f1_score,
     precision_score,
     recall_score,
+    f1_score,
+    classification_report,
+    confusion_matrix
 )
-from sklearn.model_selection import train_test_split
 
 
-# =========================================================
-# 1. ĐƯỜNG DẪN VÀ CẤU HÌNH
-# =========================================================
-BASE_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = BASE_DIR.parent if BASE_DIR.name.lower() == "python" else BASE_DIR
+# =====================================================
+# 1. ĐƯỜNG DẪN
+# =====================================================
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = SCRIPT_DIR.parent
 
-DATA_CANDIDATES = [
-    BASE_DIR / "processed_train.csv",
-    BASE_DIR / "python" / "processed_train.csv",
-    BASE_DIR.parent / "processed_train.csv",
-]
-
+DATA_PATH = SCRIPT_DIR / "processed_train.csv"
 MODEL_PATH = PROJECT_DIR / "random_forest.pkl"
 
+
+# =====================================================
+# 2. DANH SÁCH 13 ĐẶC TRƯNG
+# =====================================================
 FEATURE_COLUMNS = [
     "Pclass",
     "Sex",
@@ -43,136 +42,129 @@ FEATURE_COLUMNS = [
     "Title_Master",
     "Title_Miss",
     "Title_Mr",
-    "Title_Mrs",
+    "Title_Mrs"
 ]
 
 
-# =========================================================
-# 2. ĐỌC VÀ KIỂM TRA DỮ LIỆU
-# =========================================================
-def find_data_file():
-    for path in DATA_CANDIDATES:
-        if path.is_file():
-            return path
-
+# =====================================================
+# 3. ĐỌC DỮ LIỆU
+# =====================================================
+if not DATA_PATH.exists():
     raise FileNotFoundError(
-        "Không tìm thấy processed_train.csv. "
-        "Hãy đặt file này cùng thư mục với random_forest.py "
-        "hoặc trong thư mục dự án."
+        f"Không tìm thấy dữ liệu: {DATA_PATH}"
     )
 
+# Cột đầu tiên trong CSV là PassengerId (index),
+# không đưa cột này vào huấn luyện.
+df = pd.read_csv(DATA_PATH, index_col=0)
 
-def load_dataset():
-    data_path = find_data_file()
-    df = pd.read_csv(data_path)
+print("Kích thước dữ liệu ban đầu:", df.shape)
 
-    print("Đường dẫn dữ liệu:", data_path)
-    print("Kích thước dữ liệu ban đầu:", df.shape)
+if "Survived" not in df.columns:
+    raise ValueError("Không tìm thấy cột Survived.")
 
-    if "Survived" not in df.columns:
-        raise ValueError("Dữ liệu không có cột mục tiêu 'Survived'.")
+# Tách đặc trưng và nhãn
+X = df.drop(columns=["Survived", "PassengerId"], errors="ignore")
+y = df["Survived"]
 
-    # Loại bỏ cột định danh, không sử dụng để dự đoán.
-    df = df.drop(
-        columns=["PassengerId", "Unnamed: 0"],
-        errors="ignore",
+# Kiểm tra và sắp xếp đúng 13 đặc trưng
+missing_columns = [
+    col for col in FEATURE_COLUMNS if col not in X.columns
+]
+
+if missing_columns:
+    raise ValueError(
+        f"Dữ liệu thiếu các cột: {missing_columns}"
     )
 
-    missing_columns = [
-        column for column in FEATURE_COLUMNS
-        if column not in df.columns
-    ]
+X = X[FEATURE_COLUMNS]
 
-    extra_columns = [
-        column for column in df.columns
-        if column not in FEATURE_COLUMNS + ["Survived"]
-    ]
+print("Số đặc trưng sử dụng:", X.shape[1])
+print("Các đặc trưng:", X.columns.tolist())
 
-    if missing_columns:
-        raise ValueError(
-            "Dữ liệu đang thiếu các cột đặc trưng: "
-            + ", ".join(missing_columns)
-        )
-
-    if extra_columns:
-        print("Các cột không sử dụng:", extra_columns)
-
-    # Lấy đúng 13 đặc trưng theo thứ tự của app.py.
-    X = df[FEATURE_COLUMNS].copy()
-    y = df["Survived"].astype(int).copy()
-
-    if X.isnull().any().any():
-        raise ValueError(
-            "Dữ liệu X vẫn còn giá trị thiếu. "
-            "Hãy kiểm tra lại bước tiền xử lý."
-        )
-
-    if y.isnull().any():
-        raise ValueError("Cột Survived có giá trị thiếu.")
-
-    print("Số đặc trưng sử dụng:", len(FEATURE_COLUMNS))
-    print("Các đặc trưng:", X.columns.tolist())
-
-    print("\nPhân bố nhãn:")
-    print(y.value_counts().sort_index())
-
-    return X, y
+print("\nPhân bố nhãn:")
+print(y.value_counts().sort_index())
 
 
-# =========================================================
-# 3. HUẤN LUYỆN VÀ ĐÁNH GIÁ RANDOM FOREST
-# =========================================================
-def main():
-    X, y = load_dataset()
+# =====================================================
+# 4. CHIA DỮ LIỆU TRAIN VÀ TEST
+# =====================================================
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
+)
 
-    # Chia dữ liệu: 80% huấn luyện, 20% kiểm tra.
-    X_train, X_valid, y_train, y_valid = train_test_split(
-        X,
-        y,
-        test_size=0.2,
-        random_state=42,
-        stratify=y,
-    )
-
-    # Khởi tạo mô hình Random Forest.
-    model = RandomForestClassifier(
-        n_estimators=100,
-        criterion="gini",
-        max_depth=None,
-        random_state=42,
-        class_weight=None,
-        n_jobs=-1,
-    )
-
-    print("\nĐang huấn luyện Random Forest...")
-    model.fit(X_train, y_train)
-
-    # Dự đoán trên tập kiểm tra.
-    y_pred = model.predict(X_valid)
-
-    # Tính các chỉ số đánh giá.
-    accuracy = accuracy_score(y_valid, y_pred)
-    precision = precision_score(y_valid, y_pred, zero_division=0)
-    recall = recall_score(y_valid, y_pred, zero_division=0)
-    f1 = f1_score(y_valid, y_pred, zero_division=0)
-
-    print("\n========== KẾT QUẢ RANDOM FOREST ==========")
-    print(f"Accuracy : {accuracy:.4f}")
-    print(f"Precision: {precision:.4f}")
-    print(f"Recall   : {recall:.4f}")
-    print(f"F1-score : {f1:.4f}")
-
-    print("\nClassification Report:")
-    print(classification_report(y_valid, y_pred, zero_division=0))
-
-    print("Confusion Matrix:")
-    print(confusion_matrix(y_valid, y_pred))
-
-    # Lưu mô hình.
-    joblib.dump(model, MODEL_PATH)
-
-    print("\nĐã lưu mô hình tại:", MODEL_PATH)
+print("\nKích thước tập huấn luyện:", X_train.shape)
+print("Kích thước tập kiểm tra:", X_test.shape)
 
 
-if __name__ == "__main__":
-    main()
+# =====================================================
+# 5. KHỞI TẠO VÀ HUẤN LUYỆN RANDOM FOREST
+# =====================================================
+model = RandomForestClassifier(
+    n_estimators=100,
+    criterion="gini",
+    max_depth=None,
+    random_state=42,
+    class_weight=None,
+    n_jobs=-1
+)
+
+print("\nĐang huấn luyện Random Forest...")
+
+model.fit(X_train, y_train)
+
+
+# =====================================================
+# 6. DỰ ĐOÁN
+# =====================================================
+y_pred = model.predict(X_test)
+
+
+# =====================================================
+# 7. ĐÁNH GIÁ MÔ HÌNH
+# =====================================================
+accuracy = accuracy_score(y_test, y_pred)
+
+precision = precision_score(
+    y_test, y_pred, zero_division=0
+)
+
+recall = recall_score(
+    y_test, y_pred, zero_division=0
+)
+
+f1 = f1_score(
+    y_test, y_pred, zero_division=0
+)
+
+print("\n========== KẾT QUẢ RANDOM FOREST ==========")
+
+print(f"Accuracy : {accuracy:.4f}")
+print(f"Precision: {precision:.4f}")
+print(f"Recall   : {recall:.4f}")
+print(f"F1-score : {f1:.4f}")
+
+print("\nClassification Report:")
+print(classification_report(
+    y_test,
+    y_pred,
+    zero_division=0
+))
+
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
+
+
+# =====================================================
+# 8. LƯU MÔ HÌNH
+# =====================================================
+joblib.dump(model, MODEL_PATH)
+
+print("\nĐã lưu mô hình tại:")
+print(MODEL_PATH)
+
+print("\nHoàn thành huấn luyện Random Forest!")
