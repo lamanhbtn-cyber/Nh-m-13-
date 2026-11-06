@@ -4,7 +4,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import (
     accuracy_score,
@@ -54,7 +54,8 @@ if not DATA_PATH.exists():
         f"Không tìm thấy dữ liệu: {DATA_PATH}"
     )
 
-# Bỏ cột index PassengerId khỏi dữ liệu đặc trưng
+# Cột đầu tiên trong CSV là PassengerId (index),
+# không đưa cột này vào huấn luyện.
 df = pd.read_csv(DATA_PATH, index_col=0)
 
 print("Kích thước dữ liệu ban đầu:", df.shape)
@@ -63,7 +64,7 @@ if "Survived" not in df.columns:
     raise ValueError("Không tìm thấy cột Survived.")
 
 # Tách đặc trưng và nhãn
-X = df.drop(columns=["Survived", "PassengerId"], errors="ignore")
+X = df.drop(columns=["Survived"])
 y = df["Survived"]
 
 # Kiểm tra và sắp xếp đúng 13 đặc trưng
@@ -75,6 +76,11 @@ if missing_columns:
     raise ValueError(
         f"Dữ liệu thiếu các cột: {missing_columns}"
     )
+
+# Cảnh báo cột thừa (nếu có)
+extra_columns = [col for col in X.columns if col not in FEATURE_COLUMNS]
+if extra_columns:
+    print(f"⚠️ Cột thừa sẽ bị bỏ: {extra_columns}")
 
 X = X[FEATURE_COLUMNS]
 
@@ -138,7 +144,7 @@ f1 = f1_score(
     y_test, y_pred, zero_division=0
 )
 
-print("\n========== KẾT QUẢ GRADIENT BOOSTING ==========")
+print("\n========== KẾT QUẢ GRADIENT BOOSTING (Train/Test Split) ==========")
 
 print(f"Accuracy : {accuracy:.4f}")
 print(f"Precision: {precision:.4f}")
@@ -157,11 +163,27 @@ print(confusion_matrix(y_test, y_pred))
 
 
 # =====================================================
-# 8. LƯU MÔ HÌNH
+# 8. CROSS-VALIDATION (đánh giá vững hơn)
 # =====================================================
+print("\n========== CROSS-VALIDATION (5-Fold) ==========")
+
+cv_accuracy = cross_val_score(model, X, y, cv=5, scoring="accuracy")
+cv_f1 = cross_val_score(model, X, y, cv=5, scoring="f1")
+
+print(f"CV Accuracy : {cv_accuracy.mean():.4f} ± {cv_accuracy.std():.4f}")
+print(f"CV F1-score : {cv_f1.mean():.4f} ± {cv_f1.std():.4f}")
+print(f"Từng fold (Accuracy): {[round(s, 4) for s in cv_accuracy]}")
+
+
+# =====================================================
+# 9. HUẤN LUYỆN LẠI TRÊN TOÀN BỘ DỮ LIỆU VÀ LƯU
+# =====================================================
+print("\nHuấn luyện lại trên toàn bộ dữ liệu trước khi lưu...")
+model.fit(X, y)
+
 joblib.dump(model, MODEL_PATH)
 
-print("\nĐã lưu mô hình tại:")
-print(MODEL_PATH)
+print(f"Đã lưu mô hình tại: {MODEL_PATH}")
+print(f"Mô hình được train trên {X.shape[0]} mẫu (toàn bộ dữ liệu).")
 
 print("\nHoàn thành huấn luyện Gradient Boosting!")
